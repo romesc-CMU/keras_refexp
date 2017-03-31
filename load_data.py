@@ -16,10 +16,10 @@ sys.path.append(path_prefix + "google_refexp_py_lib")
 from refexp import Refexp
 
 # Specify datasets path.
-refexp_filename='google_refexp_dataset_release/google_refexp_train_201511_coco_aligned.json'
-coco_filename='external/coco/annotations/instances_train2014.json'
-imagesDir = 'external/coco/images'
-imagesType = 'train2014'
+refexp_filename = path_prefix + 'google_refexp_dataset_release/google_refexp_train_201511_coco_aligned.json'
+coco_filename = path_prefix + 'external/coco/annotations/instances_train2014.json'
+imagesDir = path_prefix + 'external/coco/images'
+imagesType = path_prefix + 'train2014'
 
 # Create Refexp instance.
 refexp = Refexp(refexp_filename, coco_filename)

@@ -28,4 +28,4 @@ img_ids = refexp.getImgIds()
 for img_id in img_ids[:3]:
     anns = refexp.getAnnIds(img_id)
     ann = refexp.loadAnns(anns[0])[0]
-    print ann
+    refexp.showAnn(ann, printRefexps=False)

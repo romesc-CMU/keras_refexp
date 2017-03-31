@@ -11,8 +11,8 @@ import os
 # Import Refexp python class
 # Please MAKE SURE that ./google_refexp_py_lib is in your
 # python library search path
-path_prefix = "projects/tir2/users/cmalaviy/11777/Google_Refexp_toolbox/"
-sys.path.append(path_prefix + "google_refexp_py_lib")
+# path_prefix = "/projects/tir2/users/cmalaviy/11777/Google_Refexp_toolbox/"
+# sys.path.append(path_prefix + "google_refexp_py_lib")
 from refexp import Refexp
 
 # Specify datasets path.

@@ -7,6 +7,7 @@ pylab.rcParams['figure.figsize'] = (10.0, 8.0)
 import matplotlib.patches as mpatches
 import sys
 import os
+import ipdb
 
 # Import Refexp python class
 # Please MAKE SURE that ./google_refexp_py_lib is in your
@@ -29,3 +30,4 @@ for img_id in img_ids[:3]:
     anns = refexp.getAnnIds(img_id)
     ann = refexp.loadAnns(anns[0])[0]
     refexp.showAnn(ann, printRefexps=False)
+    ipdb.set_trace()

@@ -1,13 +1,14 @@
 import scipy
-import numpy as np
-import skimage.io as io
-import matplotlib.pyplot as plt
-import pylab
-pylab.rcParams['figure.figsize'] = (10.0, 8.0)
-import matplotlib.patches as mpatches
+#import numpy as np
+#import skimage.io as io
+#import matplotlib.pyplot as plt
+#import pylab
+#pylab.rcParams['figure.figsize'] = (10.0, 8.0)
+#import matplotlib.patches as mpatches
 import sys
-import os
+#import os
 #import IPython
+import pickle
 
 # Import Refexp python class
 # Please MAKE SURE that ./google_refexp_py_lib is in your
@@ -20,23 +21,27 @@ def load_refexps():
     # Specify datasets path.
     refexp_filename = path_prefix + 'google_refexp_dataset_release/google_refexp_train_201511_coco_aligned.json'
     coco_filename = path_prefix + 'external/coco/annotations/instances_train2014.json'
-    imagesDir = path_prefix + 'external/coco/images'
-    imagesType = path_prefix + 'train2014'
+    #imagesDir = path_prefix + 'external/coco/images'
+    #imagesType = path_prefix + 'train2014'
 
     # Create Refexp instance.
     refexp = Refexp(refexp_filename, coco_filename)
     img_ids = refexp.getImgIds()
     refexp_list = []
+    maxlen = 0
 
-    for img_id in img_ids[:3]:
+    for img_id in img_ids:
         anns = refexp.getAnnIds(img_id)
         ann = refexp.loadAnns(anns[0])[0]
         #IPython.embed()
         refexp_text = refexp.loadRefexps(ann['refexp_ids'][0])[0]['raw']
-        refexp_list.append(refexp_text.encode('utf8')) 
+        refexp_words = refexp_text.encode('utf8').split()
+        refexp_list.append(refexp_words)
 
     return refexp_list
 
 #---------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    load_refexps()
+    refexp_list = load_refexps()
+    with open("annotations.pkl", "wb") as f:
+        pickle.dump(refexp_list, f)

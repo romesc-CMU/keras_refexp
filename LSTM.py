@@ -1,7 +1,9 @@
 from __future__ import print_function
 import os
 os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=gpu,floatX=float32"
-from keras.models import Sequential
+#from keras.models import Sequential
+from keras.models import Model
+from keras.layers import Input, concatenate
 from keras.layers import Activation
 from keras.layers import LSTM, Dropout, TimeDistributed, Dense
 from keras.layers.embeddings import Embedding
@@ -75,20 +77,28 @@ padded_Y = padded_Y_np
 print('Build model...')
 #IPython.embed()
 #pdb.set_trace()
-model = Sequential()
-model.add(Embedding(vocab_size, 1024, input_length=maxlen))
-model.add(Dropout(0.5))
-model.add(LSTM(1024, input_shape=(maxlen, 1024), return_sequences=True, dropout=0.5))
+#model = Sequential()
+input_sent = Input(shape=(maxlen,))
+input_image = Input(shape=(maxlen, 2005,))
+embed_sent = Embedding(vocab_size, 1024)(input_sent)
+#model.add(Embedding(vocab_size, 1024, input_length=maxlen))
 #model.add(Dropout(0.5))
-model.add(TimeDistributed(Dense(vocab_size, activation='softmax')))
-
+#model.add(LSTM(1024, input_shape=(maxlen, 1024), return_sequences=True, dropout=0.5))
+x = concatenate([input_image, embed_sent])
+x = LSTM(1024, return_sequences=True, dropout=0.5)(x)
+#model.add(Dropout(0.5))
+#model.add(TimeDistributed(Dense(vocab_size, activation='softmax')))
+x = TimeDistributed(Dense(vocab_size, activation='softmax'))(x)
+model = Model(inputs=[input_sent, input_image], outputs=x)
 optimizer = RMSprop(lr=0.01, clipnorm=10.)
 model.compile(loss='categorical_crossentropy', optimizer=optimizer)
 
+fake_image = np.zeros((2000, maxlen, 2005))
+print(padded_X.shape)
 
 # train the model, output generated text after each iteration
 for iteration in range(1, 5):
     print()
     print('-' * 50)
     print('Iteration', iteration)
-    loss = model.fit(padded_X, padded_Y, batch_size=16, epochs=1)
+    loss = model.fit([padded_X, fake_image], padded_Y, batch_size=16, epochs=1)

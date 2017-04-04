@@ -1,7 +1,13 @@
-import numpy as np
-import scipy.io
 import sys
+import os
+#sys.path.insert(0, r'/rscalise/storage/refexp/Google_Refexp_toolbox/')
+import numpy as np
+import cv2
+import skimage.io as io
 import argparse
+import operator
+
+import matplotlib.pyplot as plt
 
 from keras.models import Sequential
 from keras.layers.core import Dense, Activation, Merge, Dropout, Reshape
@@ -9,13 +15,31 @@ from keras.layers.recurrent import LSTM
 from keras.utils import np_utils, generic_utils
 from keras.callbacks import ModelCheckpoint, RemoteMonitor
 
+# Pre-Trained VGG16
+from keras.applications.vgg16 import VGG16
+from keras.applications.vgg16 import preprocess_input
+from keras.preprocessing import image
+
+
 from sklearn.externals import joblib
 from sklearn import preprocessing
 
 from spacy.en import English
+from refexp.Google_Refexp_toolbox.google_refexp_py_lib.refexp import Refexp 
 
-from utils import grouper, selectFrequentAnswers
-from features import get_images_matrix, get_answers_matrix, get_questions_tensor_timeseries
+#from Google_Refexp_toolbox.google_refexp_py_lib.refexp import Refexp
+
+# Specify refexp dataset paths
+refexp_filename='/home/rscalise/storage/refexp/Google_Refexp_toolbox/google_refexp_dataset_release/google_refexp_train_201511_coco_aligned.json'
+coco_filename='/home/rscalise/storage/refexp/Google_Refexp_toolbox/external/coco/annotations/instances_train2014.json'
+imagesDir='/home/rscalise/storage/refexp/Google_Refexp_toolbox/external/coco/images'
+imagesType='train2014'
+
+# Create instance of Refexp
+refexp = Refexp(refexp_filename, coco_filename)
+
+#from utils import grouper, selectFrequentAnswers
+#from features import get_images_matrix, get_answers_matrix, get_questions_tensor_timeseries
 import ipdb
 
 
@@ -35,25 +59,98 @@ def main():
     args = parser.parse_args()
 
 
-    #Retrieve and Format Data
-    #TODO
+    # Retrieve and Format Data
+
+    catIds = refexp.getCatIds(catNms=['dog'])
+    imgIds = refexp.getImgIds(catIds=catIds)
+
+    random_img_id = imgIds[np.random.randint(0,len(imgIds))]
+    img_struct = refexp.loadImgs(random_img_id)[0]
+    I = io.imread(os.path.join(imagesDir, imagesType, img_struct['file_name']))
+
+    I_sz = I.shape[0]*I.shape[1] #interpreted 'size' as area since it is indicated as a scalar
+    I_asp_ratio = float(I.shape[0])/float(I.shape[1])
     
 
     #====================== Define Model 1 ======================
-    model = Sequential()
-    model.add(Embedding(max_features, embedding_size, input_length=maxlen))
-    model.add(Dropout(0.25))
-    model.add(ConvolutionalD(nb_filter=nb_filter,
-                             filter_length=filter_length,
-                             border_mode='valid',
-                             activation='relu',
-                             subsample_length=1))
-    model.add(MaxPooling1D(pool_length=pool_length))
-    model.add(LSTM(lstm_output_size))
-    model.add(Dense(1))
-    model.add(Activation('sigmoid'))
+    
+    # Note: We are using the full model (include_top)  since the paper indicates they use the 'last 1000 dimensional layer of VGGNet'
+    image_model = VGG16(weights='imagenet', include_top=True)
+     
+    # Truncates the model to the 3rd layer
+    #model = Model(input=image_model.input, output=image_model.get_layer('block3_conv3').output)
+
+    for R in refexp.getRegionCandidates(img_struct):
+        W = R[2]
+        H = R[3]
+        x_tl = max(R[0], 0)
+        y_tl = max(R[1], 0)
+        x_br = x_tl+W
+        y_br = y_tl+H
+        I_R_sz = W*H 
+        I_R_asp_ratio = W/H
+
+        # Crop I to candidate region I_R
+
+        I_R = I[y_tl:y_br, x_tl:x_br]
+
+        I_R_locSz_vec = [float(x_tl)/float(W), float(y_tl)/float(H), float(x_br)/float(W), float(y_br)/float(H), float(I_R_sz)/float(I_sz) ]
+        
 
 
+    #==== Preprocess I and I_R
+
+    # compute mean channel values
+    I_mean_vals_per_channel = np.floor(np.average(np.average(I, axis=0), axis=0))
+    I_R_mean_vals_per_channel = np.floor(np.average(np.average(I_R, axis=0), axis=0))
+    
+
+    # squarifying
+    I_pad = padImageSquare(I, I_mean_vals_per_channel)
+    I_R_pad = padImageSquare(I_R, I_R_mean_vals_per_channel)
+
+    # preprocessing
+    ipdb.set_trace()
+    I_pp = cv2.resize(I_pad, (224, 224)).astype(np.float32)
+    ipdb.set_trace()
+    I_pp[:,:,0] -= I_mean_vals_per_channel[0] #subtract mean vals
+    I_pp[:,:,1] -= I_mean_vals_per_channel[1]
+    I_pp[:,:,2] -= I_mean_vals_per_channel[2]
+    #I_pp = I_pp.transpose((2,0,1)) #ordering for theano backend
+    I_pp = np.expand_dims(I_pp, axis=0)
+    I_R_pp = cv2.resize(I_R_pad, (224, 224)).astype(np.float32)
+    I_R_pp[:,:,0] -= I_R_mean_vals_per_channel[0] #subtract mean vals
+    I_R_pp[:,:,1] -= I_R_mean_vals_per_channel[1]
+    I_R_pp[:,:,2] -= I_R_mean_vals_per_channel[2]
+    #I_R_pp = I_R_pp.transpose((2,0,1)) #ordering for theano backend
+    I_R_pp = np.expand_dims(I_R_pp, axis=0)
+
+
+
+
+    #==== Generate Representations
+
+    I_feats = image_model.predict(I_pp)
+    I_R_feats = image_model.predict(I_R_pp)
+
+
+    #==== Testing/Visualization
+
+    #import keras.applications.imagenet_utils as ka
+    #print ka.decode_predictions(I_feats)
+    #plt.imshow(I_pad)
+    #plt.show()
+    #ipdb.set_trace()
+
+    #print ka.decode_predictions(I_R_feats)
+    #plt.imshow(I_R_pad)
+    #plt.show()
+    #ipdb.set_trace()
+
+    #==== Concatentate to 2005-dimensional vector for input to LSTM
+    image_rep_vec = [I_feats, I_R_feats, I_R_locSz_vec]
+
+    ipdb.set_trace()
 
     #====================== Define Model 2 ======================
     image_model = Sequential()
@@ -143,6 +240,29 @@ def main():
             model.save_weights(model_file_name + '_epoch_{:03d}.hdf5'.format(k))
 
     model.save_weights(model_file_name + '_epoch_{:03d}.hdf5'.format(k))
+
+def padImageSquare(img, mean_channel_vals):
+    pad_color = mean_channel_vals 
+
+    # Find the smaller dimension index and size
+    img_dims = [img.shape[0], img.shape[1]]
+    min_idx, min_val = min(enumerate(img_dims), key=operator.itemgetter(1))
+    max_idx, max_val = max(enumerate(img_dims), key=operator.itemgetter(1))
+    diff = max_val - min_val
+    #fix this so that I_pad is always square
+    if diff%2 != 0:
+        diff += 1
+
+    pad_num = diff/2
+
+
+    # Pad the smaller dimension
+    if min_idx == 0:
+        img_padded = cv2.copyMakeBorder(img, pad_num, pad_num, 0, 0, cv2.BORDER_CONSTANT, value=pad_color) 
+    else:
+        img_padded = cv2.copyMakeBorder(img, 0, 0, pad_num, pad_num, cv2.BORDER_CONSTANT, value=pad_color) 
+
+    return img_padded
     
 if __name__ == "__main__":
     main()
